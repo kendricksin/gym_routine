@@ -48,102 +48,194 @@ Lark Base (Bitable)   ← all workout data
 
 ---
 
-## Part 2 — Create the Lark Base (Database)
+## Part 2 — Create the Lark Base (Database) via API
 
-1. In Lark, create a new **Base** (click + → Base)
-2. Name it `Gym Tracker`
-3. Create the following tables with these exact column names and types:
+**Important:** You cannot share an existing Base with an app through the Lark UI — apps don't appear in the share search. The app must **create the Base itself** via API so it becomes the owner with full write access.
 
-### Table: `WorkoutLog`
-| Field name | Type |
-|---|---|
-| `log_id` | Auto Number |
-| `timestamp` | DateTime |
-| `date` | Date |
-| `session_type` | Text |
-| `exercise_name` | Text |
-| `set_number` | Number |
-| `weight_kg` | Number |
-| `reps` | Number |
-| `RPE` | Number |
-| `notes` | Text |
+### How it works
 
-### Table: `ExerciseHistory`
-| Field name | Type |
-|---|---|
-| `exercise` | Text |
-| `last_date` | Date |
-| `last_weight` | Number |
-| `last_reps` | Number |
-| `last_total_volume` | Number |
-| `last_top_set_intensity` | Number |
-| `expected_weight` | Number |
-| `expected_reps_per_set` | Number |
-| `session_count` | Number |
-| `streak` | Number |
-| `consecutive_rpe_10` | Number |
-| `stall_nudge_sent` | Checkbox |
+1. The app calls `POST /bitable/v1/apps` to create a new Base → it becomes the **owner**
+2. The app calls `POST /bitable/v1/apps/:app_token/tables` to create each table with typed fields
+3. The app calls `POST /drive/v1/permissions/:token/members` to share the Base with the user
 
-### Table: `SessionSequence`
-| Field name | Type |
-|---|---|
-| `session_number` | Number |
-| `session_type` | Text |
-| `date` | Date |
-| `completed` | Checkbox |
+### Lark Base API Reference
 
-### Table: `SessionTemplates`
-| Field name | Type |
-|---|---|
-| `template_id` | Auto Number |
-| `session_type` | Text |
-| `exercise_name` | Text |
-| `order` | Number |
-| `sets` | Number |
-| `reps_target` | Text |
-| `big_small` | Text |
+**Base URL:** `https://open.larksuite.com/open-apis`
 
-Seed `SessionTemplates` with the 15 rows from `SPEC.md § 7`.
+**Auth:** All requests need `Authorization: Bearer <tenant_access_token>` header.
 
-### Table: `ExerciseCatalog`
-| Field name | Type |
-|---|---|
-| `exercise_id` | Auto Number |
-| `name` | Text |
-| `category` | Text |
-| `muscle_group` | Text |
-| `primary` | Checkbox |
-| `equipment` | Text |
-| `big_small` | Text |
+Get a token:
+```
+POST /auth/v3/tenant_access_token/internal
+Body: {"app_id": "<APP_ID>", "app_secret": "<APP_SECRET>"}
+Returns: {"tenant_access_token": "t-xxx", "expire": 7200}
+```
 
-Seed with the 35 exercises from `SPEC.md § 4`.
+#### Create Base (app becomes owner)
+```
+POST /bitable/v1/apps
+Body: {"name": "Gym Tracker"}
+Returns: {"data": {"app": {"app_token": "xxx", "default_table_id": "tblxxx", "url": "https://..."}}}
+```
 
-### Table: `Progress`
-| Field name | Type |
-|---|---|
-| `date` | Date |
-| `session_type` | Text |
-| `exercises_completed` | Number |
-| `total_volume` | Number |
-| `first_exercise_time` | DateTime |
-| `last_exercise_time` | DateTime |
-| `duration_minutes` | Number |
-| `notes` | Text |
+#### Create Table (with typed fields)
+```
+POST /bitable/v1/apps/:app_token/tables
+Body: {
+  "table": {
+    "name": "WorkoutLog",
+    "default_view_name": "All Sets",
+    "fields": [
+      {"field_name": "date",          "type": 5},
+      {"field_name": "exercise_name", "type": 1},
+      {"field_name": "weight_kg",     "type": 2}
+    ]
+  }
+}
+Returns: {"data": {"table_id": "tblxxx"}}
+```
 
-### Table: `BodyLog`
-| Field name | Type |
-|---|---|
-| `log_date` | Date |
-| `weight_kg` | Number |
-| `bodyfat_pct` | Number |
-| `notes` | Text |
+**Field type codes:**
 
-4. For each table, copy its **Table ID** from the URL when the table is selected:
-   - URL pattern: `/base/<app_token>?table=<table_id>`
-   - Save each table ID as the corresponding env var below
+| Code | Type | Example |
+|------|------|---------|
+| 1 | Text | `"Bench Press"` |
+| 2 | Number | `60`, `62.5` |
+| 5 | Date | `1776441600000` (millisecond timestamp) |
+| 7 | Checkbox | `true` / `false` |
 
-5. Share the Base with your Lark App:
-   - In the Base → top-right **Share** → add the bot by its App ID with **Editor** permission
+#### Share Base with a user
+```
+POST /drive/v1/permissions/:app_token/members?type=bitable&need_notification=true
+Body: {"member_type": "email", "member_id": "user@example.com", "perm": "full_access"}
+```
+
+`perm` options: `view`, `edit`, `full_access`
+
+#### Create Record
+```
+POST /bitable/v1/apps/:app_token/tables/:table_id/records
+Body: {"fields": {"name": "Bench Press", "weight_kg": 60, "reps": 8, "date": 1776441600000}}
+Returns: {"data": {"record": {"record_id": "recxxx", "fields": {...}}}}
+```
+
+#### Batch Create Records (up to 500 per call)
+```
+POST /bitable/v1/apps/:app_token/tables/:table_id/records/batch_create
+Body: {"records": [{"fields": {...}}, {"fields": {...}}]}
+Returns: {"data": {"records": [{"record_id": "recxxx", "fields": {...}}, ...]}}
+```
+
+#### Search Records (replaces deprecated List endpoint)
+```
+POST /bitable/v1/apps/:app_token/tables/:table_id/records/search
+Body: {
+  "filter": {
+    "conjunction": "and",
+    "conditions": [
+      {"field_name": "exercise_name", "operator": "is", "value": ["Bench Press"]}
+    ]
+  },
+  "sort": [{"field_name": "set_number", "desc": false}],
+  "automatic_fields": true
+}
+Returns: {"data": {"items": [{"record_id": "recxxx", "fields": {...}}, ...], "total": 3, "has_more": false}}
+```
+
+**Filter operators:** `is`, `isNot`, `contains`, `doesNotContain`, `isEmpty`, `isNotEmpty`, `isGreater`, `isGreaterEqual`, `isLess`, `isLessEqual`
+
+**Note:** Text fields return as rich-text arrays from Search: `[{"text": "Bench Press", "type": "text"}]`. Normalise to plain strings when reading.
+
+#### Update Record
+```
+PUT /bitable/v1/apps/:app_token/tables/:table_id/records/:record_id
+Body: {"fields": {"weight_kg": 62.5, "RPE": 8}}
+```
+
+#### Delete Record
+```
+DELETE /bitable/v1/apps/:app_token/tables/:table_id/records/:record_id
+```
+
+### Table Definitions
+
+The app creates these 7 tables on first run. Field names must match exactly.
+
+**WorkoutLog** — one row per set
+| Field | Type code | Description |
+|---|---|---|
+| `date` | 5 (Date) | Workout date (ms timestamp) |
+| `session_type` | 1 (Text) | push / pull / legs |
+| `exercise_name` | 1 (Text) | Exact exercise name |
+| `set_number` | 2 (Number) | 1, 2, 3... |
+| `weight_kg` | 2 (Number) | Weight for this set |
+| `reps` | 2 (Number) | Reps performed |
+| `RPE` | 2 (Number) | 1–10 scale (optional) |
+| `notes` | 1 (Text) | Form notes, variations |
+
+**ExerciseHistory** — one row per exercise, updated after every session
+| Field | Type code | Description |
+|---|---|---|
+| `exercise` | 1 (Text) | Exercise name |
+| `last_date` | 5 (Date) | Last performed |
+| `last_weight` | 2 (Number) | Weight on heaviest set |
+| `last_reps` | 2 (Number) | Reps on heaviest set |
+| `last_total_volume` | 2 (Number) | Sum of weight×reps across all sets |
+| `last_top_set_intensity` | 2 (Number) | Weight on heaviest single set |
+| `expected_weight` | 2 (Number) | Target weight for next session |
+| `expected_reps_per_set` | 2 (Number) | Target reps per set for next session |
+| `session_count` | 2 (Number) | Times performed |
+| `streak` | 2 (Number) | Consecutive sessions meeting target |
+| `consecutive_rpe_10` | 2 (Number) | Consecutive RPE 10 sessions |
+| `stall_nudge_sent` | 7 (Checkbox) | Whether "eat more" nudge was sent |
+
+**SessionSequence** — tracks position in A-B-C rotation
+| Field | Type code | Description |
+|---|---|---|
+| `session_number` | 2 (Number) | Sequential count (1, 2, 3...) |
+| `session_type` | 1 (Text) | push / pull / legs |
+| `date` | 5 (Date) | When performed |
+| `completed` | 7 (Checkbox) | Whether session was completed |
+
+**SessionTemplates** — pre-defined exercise order per session type
+| Field | Type code | Description |
+|---|---|---|
+| `session_type` | 1 (Text) | push / pull / legs |
+| `exercise_name` | 1 (Text) | Exercise name |
+| `order` | 2 (Number) | Position in session (1–5) |
+| `sets` | 2 (Number) | Always 3 |
+| `reps_target` | 1 (Text) | e.g. "8-10", "10-12" |
+| `big_small` | 1 (Text) | BIG or SMALL |
+
+**ExerciseCatalog** — all available exercises
+| Field | Type code | Description |
+|---|---|---|
+| `name` | 1 (Text) | Exercise name |
+| `category` | 1 (Text) | push / pull / legs |
+| `muscle_group` | 1 (Text) | e.g. chest, back, quads |
+| `primary` | 7 (Checkbox) | Is it a primary compound? |
+| `equipment` | 1 (Text) | barbell / machine / cable / dumbbell / bodyweight |
+| `big_small` | 1 (Text) | BIG or SMALL |
+
+**Progress** — one row per completed session
+| Field | Type code | Description |
+|---|---|---|
+| `date` | 5 (Date) | Session date |
+| `session_type` | 1 (Text) | push / pull / legs |
+| `exercises_completed` | 2 (Number) | Count |
+| `total_volume` | 2 (Number) | Sum of weight×reps |
+| `first_exercise_time` | 5 (Date) | Timestamp of first set |
+| `last_exercise_time` | 5 (Date) | Timestamp of last set |
+| `duration_minutes` | 2 (Number) | Derived on session close |
+| `notes` | 1 (Text) | How session felt |
+
+**BodyLog** — periodic bodyweight tracking
+| Field | Type code | Description |
+|---|---|---|
+| `log_date` | 5 (Date) | Date measured |
+| `weight_kg` | 2 (Number) | Bodyweight in kg |
+| `bodyfat_pct` | 2 (Number) | Estimated body fat % |
+| `notes` | 1 (Text) | Observations |
 
 ---
 
@@ -152,22 +244,28 @@ Seed with the 35 exercises from `SPEC.md § 4`.
 Create a `.env` file in this directory (never commit it):
 
 ```bash
-# Lark App credentials
+# Lark App credentials (required before first run)
 LARK_APP_ID=cli_xxxxxxxxxxxx
 LARK_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-# Lark Base app token (from Base URL: /base/<this_part>)
-LARK_APP_TOKEN=GpxxxxxxxxxxxxxxxxxxxxxxxxxxxBc
+# User email to share the Base with (so you can view it in Lark)
+LARK_OWNER_EMAIL=you@yourcompany.com
 
-# Table IDs (from Base URL: ?table=<this_part>)
-LARK_TABLE_WORKOUT_LOG=tblxxxxxxxxxxxxxxxxxx
-LARK_TABLE_EXERCISE_HISTORY=tblxxxxxxxxxxxxxxxxxx
-LARK_TABLE_SESSION_SEQUENCE=tblxxxxxxxxxxxxxxxxxx
-LARK_TABLE_SESSION_TEMPLATES=tblxxxxxxxxxxxxxxxxxx
-LARK_TABLE_EXERCISE_CATALOG=tblxxxxxxxxxxxxxxxxxx
-LARK_TABLE_PROGRESS=tblxxxxxxxxxxxxxxxxxx
-LARK_TABLE_BODY_LOG=tblxxxxxxxxxxxxxxxxxx
+# --- The values below are generated by the bootstrap script (Part 6) ---
+# Lark Base app token (created by the app via API)
+LARK_APP_TOKEN=
+# Table IDs (created by the app via API)
+LARK_TABLE_WORKOUT_LOG=
+LARK_TABLE_EXERCISE_HISTORY=
+LARK_TABLE_SESSION_SEQUENCE=
+LARK_TABLE_SESSION_TEMPLATES=
+LARK_TABLE_EXERCISE_CATALOG=
+LARK_TABLE_PROGRESS=
+LARK_TABLE_BODY_LOG=
 ```
+
+You only need to fill in `LARK_APP_ID`, `LARK_APP_SECRET`, and `LARK_OWNER_EMAIL` manually.
+The bootstrap script (Part 6) creates the Base + tables and fills in the rest.
 
 ---
 
@@ -225,17 +323,28 @@ openclaw start
 
 ---
 
-## Part 6 — Pre-Flight Checklist
+## Part 6 — Bootstrap the Database
 
-Before running `openclaw start`, verify:
+Run the bootstrap script to create the Base, all 7 tables, and seed data in one go:
 
-- [ ] `SessionTemplates` seeded with the 15 rows from `SPEC.md § 7`
-- [ ] `ExerciseCatalog` seeded with the 35 exercises from `SPEC.md § 4`
-- [ ] `SessionSequence` bootstrapped with one row: `session_number=0, session_type=legs, date=<today>, completed=true`
-  — this prevents the first `0 % 3` lookup from returning an empty result
-- [ ] Lark App has `bitable:app` scope **and** is shared as **Editor** on the Base (read-only will block all progression updates)
-- [ ] All 7 table IDs in `.env` are correct (copy from Base URL `?table=<id>` when each table is selected)
-- [ ] `.env` is loaded into the shell before `openclaw start` (`export $(cat .env | xargs)`)
+```bash
+uv run --with requests --with python-dotenv python poc/bootstrap.py
+```
+
+This script will:
+1. Authenticate with your Lark app credentials
+2. Create a new Base called "Gym Tracker" (app becomes owner)
+3. Create all 7 tables with correctly typed fields
+4. Seed `ExerciseCatalog` with 35 exercises from SPEC § 4
+5. Seed `SessionTemplates` with 15 rows from SPEC § 7
+6. Bootstrap `SessionSequence` with one row (`session_number=0, session_type=legs, completed=true`)
+7. Share the Base with `LARK_OWNER_EMAIL` (full access)
+8. Print all generated IDs and the Base URL
+9. Write the IDs back to `.env` automatically
+
+After running, verify:
+- [ ] You can open the Base URL in Lark and see all 7 tables
+- [ ] `.env` has all `LARK_APP_TOKEN` and `LARK_TABLE_*` values filled in
 - [ ] `send-reminder` cron is enabled (`openclaw cron enable send-reminder`)
 
 ### Session auto-close ownership
@@ -244,7 +353,15 @@ The session auto-close rules (midnight, 22:00 cutoff, 60-min inactivity) are han
 
 ### Lark Base rate limits
 
-Lark Base allows up to 10 write requests/second per app. A full session dump (5 exercises × 3 sets = 15 `WorkoutLog` writes, plus ~5 `ExerciseHistory` updates) is within limits but send them sequentially, not in a burst. `lib/lark_base.py` uses `batch_create_records` for WorkoutLog sets (one API call per exercise) to keep writes efficient.
+| Operation | Rate limit |
+|---|---|
+| Search records | 20 req/sec |
+| Create record | 50 req/sec |
+| Batch create (up to 500 records) | 10 req/sec |
+| Update record | 50 req/sec |
+| Create Base | 20 req/min |
+
+A full session dump (5 exercises × 3 sets = 15 sets) should use `batch_create` per exercise (5 API calls, not 15). `ExerciseHistory` updates are individual `PUT` calls (5 more). Total: ~10 API calls per session — well within limits.
 
 ---
 
@@ -274,7 +391,7 @@ The bot should log the sets, run the progression report, and update your targets
 | Bot doesn't respond in Lark | Check `openclaw gateway status` — WebSocket may have dropped |
 | "Table not found" errors | Double-check table IDs in `.env` match the Lark Base URLs |
 | Skills not loading | Ensure `SOUL.md` and `skills/` are in the same directory OpenClaw was started from |
-| Lark Base permission denied | Confirm the app has `bitable:app` scope and is shared as Editor on the Base |
+| Lark Base permission denied (91403) | The app must **create** the Base via API to be the owner. You cannot share a Base with an app via UI. Re-run `poc/bootstrap.py` to create a fresh Base. |
 | Cron not firing | Run `openclaw cron list` to verify `send-reminder` is enabled |
 
 ---
