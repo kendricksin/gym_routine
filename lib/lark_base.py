@@ -1,5 +1,7 @@
 """
-Lark Base (Bitable) helper — thin wrapper around lark_oapi for gym tracker tables.
+Lark Base (Bitable) helper for gym tracker tables.
+
+Uses urllib (stdlib) instead of lark_oapi — no pip install needed.
 
 Usage:
     from lib.lark_base import LarkBase
@@ -7,39 +9,67 @@ Usage:
     records = db.list_records(db.WORKOUT_LOG)
     db.create_record(db.WORKOUT_LOG, {"exercise_name": "Bench Press", "weight_kg": 60, "reps": 8})
 
-Environment variables required:
-    LARK_APP_ID       — from Lark Open Platform app credentials
-    LARK_APP_SECRET   — from Lark Open Platform app credentials
-    LARK_APP_TOKEN    — the Bitable app token (from Base URL: /base/<app_token>)
+Auto-loads env from: /home/node/.openclaw/workspace/gym_routine/.env
+(contains LARK_APP_ID, LARK_APP_SECRET, LARK_APP_TOKEN, and all LARK_TABLE_* IDs)
 
-Table IDs — fill in after creating the Base tables in Lark:
-    LARK_TABLE_WORKOUT_LOG
-    LARK_TABLE_EXERCISE_HISTORY
-    LARK_TABLE_SESSION_SEQUENCE
-    LARK_TABLE_SESSION_TEMPLATES
-    LARK_TABLE_EXERCISE_CATALOG
-    LARK_TABLE_PROGRESS
-    LARK_TABLE_BODY_LOG
+Table IDs (from gym_routine/.env):
+    LARK_TABLE_WORKOUT_LOG       — WorkoutLog
+    LARK_TABLE_EXERCISE_HISTORY  — ExerciseHistory
+    LARK_TABLE_SESSION_SEQUENCE  — SessionSequence
+    LARK_TABLE_SESSION_TEMPLATES — SessionTemplates
+    LARK_TABLE_EXERCISE_CATALOG  — ExerciseCatalog
+    LARK_TABLE_PROGRESS          — Progress
+    LARK_TABLE_BODY_LOG          — BodyLog
 """
 
 import os
+from pathlib import Path
 from typing import Any
+import urllib.request
+import json
 
-import lark_oapi as lark
-from lark_oapi.api.bitable.v1 import (
-    AppTableRecord,
-    BatchCreateAppTableRecordRequest,
-    BatchCreateAppTableRecordRequestBody,
-    CreateAppTableRecordRequest,
-    ListAppTableRecordRequest,
-    SearchAppTableRecordRequest,
-    SearchAppTableRecordRequestBody,
-    UpdateAppTableRecordRequest,
-)
+# Auto-load env from gym_routine/.env
+_ENV_PATH = Path("/home/node/.openclaw/workspace/gym_routine/.env")
+if _ENV_PATH.exists():
+    with open(_ENV_PATH) as f:
+        for line in f:
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k, v)
+
+API = "https://open.larksuite.com/open-apis"
+
+
+def _auth() -> str:
+    """Get tenant access token."""
+    data = json.dumps({
+        "app_id": os.environ["LARK_APP_ID"],
+        "app_secret": os.environ["LARK_APP_SECRET"]
+    }).encode()
+    req = urllib.request.Request(
+        f"{API}/auth/v3/tenant_access_token/internal",
+        data=data, headers={"Content-Type": "application/json"}
+    )
+    return json.loads(urllib.request.urlopen(req).read())["tenant_access_token"]
+
+
+def _headers(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=utf-8"}
+
+
+def _call(method: str, url: str, token: str, data: dict | None = None) -> dict:
+    """Make an API call. Returns parsed JSON response.data."""
+    body = json.dumps(data).encode() if data is not None else None
+    req = urllib.request.Request(url, data=body, headers=_headers(token), method=method)
+    resp = json.loads(urllib.request.urlopen(req).read())
+    if resp.get("code") != 0:
+        raise RuntimeError(f"Lark API error [{resp.get('code')}]: {resp.get('msg')} — {resp}")
+    return resp.get("data", {})
 
 
 class LarkBase:
-    # Table ID constants — set via environment variables after tables are created
+    # Table ID constants — loaded from gym_routine/.env
     WORKOUT_LOG = os.environ.get("LARK_TABLE_WORKOUT_LOG", "")
     EXERCISE_HISTORY = os.environ.get("LARK_TABLE_EXERCISE_HISTORY", "")
     SESSION_SEQUENCE = os.environ.get("LARK_TABLE_SESSION_SEQUENCE", "")
@@ -50,99 +80,55 @@ class LarkBase:
 
     def __init__(self):
         self.app_token = os.environ["LARK_APP_TOKEN"]
-        self.client = (
-            lark.Client.builder()
-            .app_id(os.environ["LARK_APP_ID"])
-            .app_secret(os.environ["LARK_APP_SECRET"])
-            .build()
-        )
+        self._token = _auth()
+
+    def _refresh_token(self):
+        self._token = _auth()
+
+    def _url(self, path: str) -> str:
+        return f"{API}/bitable/v1/apps/{self.app_token}{path}"
 
     # -------------------------------------------------------------------------
     # Read
     # -------------------------------------------------------------------------
 
     def list_records(self, table_id: str, page_size: int = 500) -> list[dict]:
-        """Return all records from a table as a list of field dicts.
-        Each item also includes the Lark record_id under key '__record_id'.
+        """Return all records from a table as list of field dicts.
+        Each includes '__record_id'.
         """
         records = []
         page_token = None
-
         while True:
-            builder = (
-                ListAppTableRecordRequest.builder()
-                .app_token(self.app_token)
-                .table_id(table_id)
-                .page_size(page_size)
-            )
+            url = f"{self._url(f'/tables/{table_id}/records')}?page_size={page_size}"
             if page_token:
-                builder = builder.page_token(page_token)
-
-            response = self.client.bitable.v1.app_table_record.list(builder.build())
-            if not response.success():
-                raise RuntimeError(
-                    f"list_records failed [{response.code}]: {response.msg}"
-                )
-
-            for item in response.data.items or []:
-                row = dict(item.fields)
-                row["__record_id"] = item.record_id
+                url += f"&page_token={page_token}"
+            data = _call("GET", url, self._token)
+            for item in data.get("items", []):
+                row = _flatten_fields(item["fields"])
+                row["__record_id"] = item["record_id"]
                 records.append(row)
-
-            if not response.data.has_more:
+            if not data.get("has_more"):
                 break
-            page_token = response.data.page_token
-
+            page_token = data.get("page_token")
         return records
 
     def get_record(self, table_id: str, record_id: str) -> dict:
-        """Fetch a single record by its Lark record_id."""
-        from lark_oapi.api.bitable.v1 import GetAppTableRecordRequest
-
-        response = self.client.bitable.v1.app_table_record.get(
-            GetAppTableRecordRequest.builder()
-            .app_token(self.app_token)
-            .table_id(table_id)
-            .record_id(record_id)
-            .build()
-        )
-        if not response.success():
-            raise RuntimeError(f"get_record failed [{response.code}]: {response.msg}")
-        row = dict(response.data.record.fields)
-        row["__record_id"] = response.data.record.record_id
+        """Fetch a single record by record_id."""
+        data = _call("GET", f"{self._url(f'/tables/{table_id}/records/{record_id}')}", self._token)
+        row = _flatten_fields(data["record"]["fields"])
+        row["__record_id"] = data["record"]["record_id"]
         return row
 
     def find_records(self, table_id: str, filter_expr: dict | None = None) -> list[dict]:
-        """Search records using a Lark filter expression.
-
-        filter_expr example:
-            {
-                "conjunction": "and",
-                "conditions": [
-                    {"field_name": "exercise_name", "operator": "is", "value": ["Bench Press"]}
-                ]
-            }
-        Returns list of field dicts, each with '__record_id'.
-        """
-        body_builder = SearchAppTableRecordRequestBody.builder()
+        """Search records using a Lark filter expression. Returns list with '__record_id'."""
+        body = {}
         if filter_expr:
-            body_builder = body_builder.filter(filter_expr)
-
-        response = self.client.bitable.v1.app_table_record.search(
-            SearchAppTableRecordRequest.builder()
-            .app_token(self.app_token)
-            .table_id(table_id)
-            .request_body(body_builder.build())
-            .build()
-        )
-        if not response.success():
-            raise RuntimeError(
-                f"find_records failed [{response.code}]: {response.msg}"
-            )
+            body["filter"] = filter_expr
+        data = _call("POST", f"{self._url(f'/tables/{table_id}/records/search')}", self._token, body)
         records = []
-        for item in response.data.items or []:
-            row = dict(item.fields)
-            row["__record_id"] = item.record_id
+        for item in data.get("items", []):
+            row = _flatten_fields(item["fields"])
+            row["__record_id"] = item["record_id"]
             records.append(row)
         return records
 
@@ -152,61 +138,29 @@ class LarkBase:
 
     def create_record(self, table_id: str, fields: dict[str, Any]) -> str:
         """Create a single record. Returns the new record_id."""
-        response = self.client.bitable.v1.app_table_record.create(
-            CreateAppTableRecordRequest.builder()
-            .app_token(self.app_token)
-            .table_id(table_id)
-            .request_body(
-                AppTableRecord.builder().fields(fields).build()
-            )
-            .build()
-        )
-        if not response.success():
-            raise RuntimeError(
-                f"create_record failed [{response.code}]: {response.msg}"
-            )
-        return response.data.record.record_id
+        # Handle rich text fields (e.g., exercise_name stored as [{"text": "...", "type": "text"}])
+        flat_fields = _unflatten_fields(fields)
+        data = _call("POST", f"{self._url(f'/tables/{table_id}/records')}", self._token,
+                     {"fields": flat_fields})
+        return data["record"]["record_id"]
 
-    def batch_create_records(
-        self, table_id: str, rows: list[dict[str, Any]]
-    ) -> list[str]:
+    def batch_create_records(self, table_id: str, rows: list[dict[str, Any]]) -> list[str]:
         """Batch create up to 500 records. Returns list of new record_ids."""
-        records = [AppTableRecord.builder().fields(r).build() for r in rows]
-        response = self.client.bitable.v1.app_table_record.batch_create(
-            BatchCreateAppTableRecordRequest.builder()
-            .app_token(self.app_token)
-            .table_id(table_id)
-            .request_body(
-                BatchCreateAppTableRecordRequestBody.builder()
-                .records(records)
-                .build()
-            )
-            .build()
-        )
-        if not response.success():
-            raise RuntimeError(
-                f"batch_create_records failed [{response.code}]: {response.msg}"
-            )
-        return [r.record_id for r in response.data.records]
+        flat_rows = [{"fields": _unflatten_fields(r)} for r in rows]
+        data = _call("POST", f"{self._url(f'/tables/{table_id}/records/batch_create')}", self._token,
+                     {"records": flat_rows})
+        return [r["record_id"] for r in data.get("records", [])]
 
-    def update_record(
-        self, table_id: str, record_id: str, fields: dict[str, Any]
-    ) -> None:
+    def update_record(self, table_id: str, record_id: str, fields: dict[str, Any]) -> None:
         """Update an existing record by record_id."""
-        response = self.client.bitable.v1.app_table_record.update(
-            UpdateAppTableRecordRequest.builder()
-            .app_token(self.app_token)
-            .table_id(table_id)
-            .record_id(record_id)
-            .request_body(
-                AppTableRecord.builder().fields(fields).build()
-            )
-            .build()
-        )
-        if not response.success():
-            raise RuntimeError(
-                f"update_record failed [{response.code}]: {response.msg}"
-            )
+        flat_fields = _unflatten_fields(fields)
+        _call("PUT", f"{self._url(f'/tables/{table_id}/records/{record_id}')}", self._token,
+              {"fields": flat_fields})
+
+    def add_field(self, table_id: str, field_name: str, field_type: int = 2) -> None:
+        """Add a new field to a table. field_type: 1=text, 2=number, 5=date, 7=checkbox."""
+        _call("POST", f"{self._url(f'/tables/{table_id}/fields')}", self._token,
+              {"field_name": field_name, "type": field_type})
 
     # -------------------------------------------------------------------------
     # Convenience queries for gym tracker
@@ -216,16 +170,9 @@ class LarkBase:
         """Return the ExerciseHistory row for a given exercise, or None."""
         rows = self.find_records(
             self.EXERCISE_HISTORY,
-            {
-                "conjunction": "and",
-                "conditions": [
-                    {
-                        "field_name": "exercise",
-                        "operator": "is",
-                        "value": [exercise_name],
-                    }
-                ],
-            },
+            {"conjunction": "and", "conditions": [
+                {"field_name": "exercise", "operator": "is", "value": [exercise_name]}
+            ]},
         )
         return rows[0] if rows else None
 
@@ -234,7 +181,7 @@ class LarkBase:
         rows = self.list_records(self.SESSION_SEQUENCE)
         if not rows:
             return None
-        return max(rows, key=lambda r: r.get("session_number", 0))
+        return max(rows, key=lambda r: int(r.get("session_number", 0)))
 
     def get_latest_bodyweight(self) -> float | None:
         """Return the most recent bodyweight from BodyLog, or None."""
@@ -248,39 +195,45 @@ class LarkBase:
         """Return SessionTemplates rows for push/pull/legs, sorted by order."""
         rows = self.find_records(
             self.SESSION_TEMPLATES,
-            {
-                "conjunction": "and",
-                "conditions": [
-                    {
-                        "field_name": "session_type",
-                        "operator": "is",
-                        "value": [session_type],
-                    }
-                ],
-            },
+            {"conjunction": "and", "conditions": [
+                {"field_name": "session_type", "operator": "is", "value": [session_type]}
+            ]},
         )
-        return sorted(rows, key=lambda r: r.get("order", 0))
+        return sorted(rows, key=lambda r: int(r.get("order", 0)))
 
-    def get_workout_sets_for_exercise(
-        self, exercise_name: str, date: str
-    ) -> list[dict]:
-        """Return all WorkoutLog sets for a given exercise on a given date (YYYY-MM-DD)."""
+    def get_workout_sets_for_exercise(self, exercise_name: str, date: str) -> list[dict]:
+        """Return all WorkoutLog sets for an exercise on a given date (YYYY-MM-DD)."""
         rows = self.find_records(
             self.WORKOUT_LOG,
-            {
-                "conjunction": "and",
-                "conditions": [
-                    {
-                        "field_name": "exercise_name",
-                        "operator": "is",
-                        "value": [exercise_name],
-                    },
-                    {
-                        "field_name": "date",
-                        "operator": "is",
-                        "value": [date],
-                    },
-                ],
-            },
+            {"conjunction": "and", "conditions": [
+                {"field_name": "exercise_name", "operator": "is", "value": [exercise_name]},
+                {"field_name": "date", "operator": "is", "value": [date]},
+            ]},
         )
         return sorted(rows, key=lambda r: r.get("set_number", 0))
+
+
+# -------------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------------
+
+def _flatten_fields(fields: dict) -> dict:
+    """Lark returns rich text fields as [{text, type}]. Flatten to plain strings."""
+    out = {}
+    for k, v in fields.items():
+        if isinstance(v, list) and v and isinstance(v[0], dict) and v[0].get("type") == "text":
+            out[k] = "".join(seg.get("text", "") for seg in v)
+        else:
+            out[k] = v
+    return out
+
+
+def _unflatten_fields(fields: dict) -> dict:
+    """Convert plain strings back to Lark rich text format for writes."""
+    out = {}
+    for k, v in fields.items():
+        if isinstance(v, str):
+            out[k] = [{"text": v, "type": "text"}]
+        else:
+            out[k] = v
+    return out

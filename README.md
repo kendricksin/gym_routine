@@ -305,21 +305,13 @@ The bootstrap script (Part 6) creates the Base + tables and fills in the rest.
 
 ---
 
-## Part 5 — Install Python dependencies
+## Part 5 — Python runtime (no install needed)
 
-The `lib/lark_base.py` helper is called by the agent via OpenClaw's `exec` tool:
+`lib/lark_base.py` uses only the Python stdlib (`urllib.request`, `json`, `os`, `pathlib`). The OpenClaw container ships Python 3 — no `pip install`, no venv, no external deps.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install lark-oapi python-dotenv
-```
+It auto-loads `.env` from the workspace root, so no shell export step is required either. Just make sure the file is present.
 
-Load the `.env` file in your shell before starting OpenClaw, or configure OpenClaw to source it:
-```bash
-export $(cat .env | xargs)
-openclaw start
-```
+*Host-side bootstrap (Part 6) is the one exception — that script runs once on the host before the agent is live, and uses `uv run --with requests` to pull `requests` ephemerally.*
 
 ---
 
