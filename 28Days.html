@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>28 Days with an AI Gym Coach — A Field Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=IBM+Plex+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    /* Brand palette */
+    --blue: #0550CF;
+    --green: #00E2E0;
+    --sky: #DFE9FC;
+    --charcoal: #212224;
+    --white: #FDFDFF;
+
+    /* Derived neutrals */
+    --ink: #212224;
+    --ink-soft: #4a4b4d;
+    --ink-faint: #8a8b8d;
+    --rule: #e4e8ef;
+    --rule-strong: #c8d2e4;
+    --paper: #FDFDFF;
+    --paper-warm: #f4f7fc;
+    --paper-accent: #DFE9FC;
+
+    /* Semantic */
+    --accent: #0550CF;
+    --accent-light: #4a85e8;
+    --highlight: #00E2E0;
+    --warn: #0550CF;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.55;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(circle at 15% 8%, rgba(0, 226, 224, 0.06) 0%, transparent 45%),
+      radial-gradient(circle at 85% 75%, rgba(5, 80, 207, 0.05) 0%, transparent 50%);
+  }
+  .container { max-width: 980px; margin: 0 auto; padding: 0 32px; }
+
+  /* ===== HEADER ===== */
+  header { padding: 48px 0 32px; border-bottom: 1px solid var(--rule); }
+  .masthead {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--ink-soft); margin-bottom: 48px;
+  }
+  .masthead .dot {
+    display: inline-block; width: 8px; height: 8px;
+    background: var(--green); border-radius: 50%;
+    margin: 0 8px; vertical-align: middle;
+    box-shadow: 0 0 0 3px rgba(0, 226, 224, 0.2);
+  }
+  h1.title {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: clamp(40px, 6.8vw, 76px);
+    font-weight: 600; line-height: 0.98; letter-spacing: -0.035em;
+    margin-bottom: 28px;
+    color: var(--ink);
+  }
+  h1.title em {
+    font-style: normal;
+    color: var(--blue);
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--blue) 0%, #2a73e8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .deck {
+    font-size: clamp(17px, 1.9vw, 21px);
+    line-height: 1.5; color: var(--ink-soft);
+    max-width: 680px; font-weight: 400;
+  }
+  .byline {
+    margin-top: 32px; font-size: 13px; color: var(--ink-faint);
+    display: flex; gap: 24px; flex-wrap: wrap; align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .byline strong { color: var(--ink); font-weight: 600; }
+  .byline a {
+    color: var(--blue); text-decoration: none;
+    border-bottom: 1px solid var(--blue); padding-bottom: 1px;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+  .byline a:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ===== STATS STRIP ===== */
+  .stats-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+    margin: 56px 0;
+    background: var(--charcoal);
+    border-radius: 8px;
+    padding: 32px 0;
+    overflow: hidden;
+  }
+  .stat { text-align: center; padding: 0 16px; border-right: 1px solid rgba(255,255,255,0.1); }
+  .stat:last-child { border-right: none; }
+  .stat-num {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: clamp(34px, 5.2vw, 56px);
+    font-weight: 600; line-height: 1; letter-spacing: -0.03em;
+    color: var(--white);
+    font-feature-settings: "tnum" 1;
+  }
+  .stat-num.highlight { color: var(--green); }
+  .stat-num .unit {
+    font-size: 0.5em; font-weight: 400;
+    color: rgba(255,255,255,0.5);
+    margin-left: 4px;
+  }
+  .stat-label {
+    margin-top: 10px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.6); font-weight: 500;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ===== SECTIONS ===== */
+  section { padding: 64px 0; border-bottom: 1px solid var(--rule); }
+  .section-num {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.2em;
+    color: var(--blue); margin-bottom: 16px; font-weight: 600;
+  }
+  h2 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: clamp(28px, 4.2vw, 44px);
+    font-weight: 600; line-height: 1.08; letter-spacing: -0.025em;
+    margin-bottom: 16px;
+    color: var(--ink);
+  }
+  h2 em {
+    font-style: normal;
+    color: var(--blue);
+    font-weight: 600;
+  }
+  .lede {
+    font-size: 18px; line-height: 1.55; color: var(--ink-soft);
+    max-width: 680px; margin-bottom: 40px;
+    font-weight: 400;
+  }
+  p { margin-bottom: 16px; font-size: 15px; color: var(--ink-soft); max-width: 680px; }
+
+  /* ===== HERO CHART ===== */
+  .hero-chart {
+    background: var(--white);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 32px;
+    margin: 32px 0;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(33,34,36,0.03), 0 4px 16px rgba(5,80,207,0.04);
+  }
+  .hero-chart::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--blue) 0%, var(--green) 100%);
+    border-radius: 12px 12px 0 0;
+  }
+  .chart-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    flex-wrap: wrap; gap: 16px; margin-bottom: 28px;
+  }
+  .chart-title {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 20px; font-weight: 600; letter-spacing: -0.015em;
+    color: var(--ink);
+  }
+  .chart-subtitle { font-size: 13px; color: var(--ink-faint); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+  .chart-delta { text-align: right; }
+  .delta-num {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 32px; font-weight: 600; color: var(--blue);
+    line-height: 1; font-feature-settings: "tnum" 1;
+    letter-spacing: -0.02em;
+  }
+  .delta-label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--ink-faint); margin-top: 6px;
+  }
+  canvas { max-width: 100%; }
+
+  /* ===== HEATMAP ===== */
+  .heatmap-wrap {
+    background: var(--white);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 32px;
+    margin: 32px 0;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(33,34,36,0.03), 0 4px 16px rgba(5,80,207,0.04);
+  }
+  .heatmap-wrap::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--blue) 0%, var(--green) 100%);
+    border-radius: 12px 12px 0 0;
+  }
+  .heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin: 8px 0 28px;
+  }
+  .heatmap-day {
+    aspect-ratio: 1 / 1;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: transform 0.15s, box-shadow 0.15s;
+    cursor: default;
+    border: 1px solid transparent;
+  }
+  .heatmap-day:hover {
+    transform: scale(1.08);
+    box-shadow: 0 6px 20px rgba(5, 80, 207, 0.25);
+    z-index: 5;
+  }
+  .heatmap-day .dom {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    opacity: 0.9;
+  }
+  .heatmap-day .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    margin-top: 4px;
+    opacity: 0.75;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  /* tier colors from brand palette */
+  .heatmap-day.tier-0 { background: var(--paper-warm); border-color: var(--rule); color: var(--ink-faint); }
+  .heatmap-day.tier-1 { background: var(--sky); color: var(--charcoal); }
+  .heatmap-day.tier-2 { background: var(--green); color: #003a39; }
+  .heatmap-day.tier-3 { background: var(--blue); color: var(--white); }
+  .heatmap-day.tier-4 { background: var(--charcoal); color: var(--green); }
+  .heatmap-day .tip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--charcoal);
+    color: var(--white);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .heatmap-day .tip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--charcoal);
+  }
+  .heatmap-day:hover .tip { opacity: 1; }
+  .heatmap-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .heatmap-weekdays span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-align: center;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+  }
+  .heatmap-legend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .heatmap-legend .scale { display: flex; align-items: center; gap: 10px; }
+  .heatmap-legend .scale .swatches { display: flex; gap: 4px; }
+  .heatmap-legend .sw { width: 16px; height: 16px; border-radius: 4px; }
+  .heatmap-legend .sw.tier-0 { background: var(--paper-warm); border: 1px solid var(--rule); }
+  .heatmap-legend .sw.tier-1 { background: var(--sky); }
+  .heatmap-legend .sw.tier-2 { background: var(--green); }
+  .heatmap-legend .sw.tier-3 { background: var(--blue); }
+  .heatmap-legend .sw.tier-4 { background: var(--charcoal); }
+  .heatmap-stats { display: flex; gap: 24px; flex-wrap: wrap; }
+  .heatmap-stats div { display: flex; align-items: baseline; gap: 6px; }
+  .heatmap-stats strong {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* ===== ACHIEVEMENTS ===== */
+  .group-block { margin-bottom: 48px; }
+  .group-head {
+    display: flex; align-items: baseline; gap: 16px;
+    margin-bottom: 20px; padding-bottom: 12px;
+    border-bottom: 2px solid var(--charcoal);
+  }
+  .group-head h3 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 22px; font-weight: 600; letter-spacing: -0.015em;
+    color: var(--ink);
+  }
+  .group-head .count {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    color: var(--ink-faint); text-transform: uppercase;
+    letter-spacing: 0.1em; margin-left: auto; font-weight: 500;
+  }
+  .achievements {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .achv {
+    background: var(--white);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .achv::before {
+    content: ''; position: absolute; top: 0; left: 0; bottom: 0;
+    width: 3px; background: var(--blue);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .achv:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(5,80,207,0.08);
+  }
+  .achv:hover::before { opacity: 1; }
+  .achv-name {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--ink-soft); margin-bottom: 10px; font-weight: 600;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .achv-value {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 22px; font-weight: 600; color: var(--ink);
+    letter-spacing: -0.02em; line-height: 1.1;
+    font-feature-settings: "tnum" 1;
+  }
+  .achv-value .arrow {
+    color: var(--blue);
+    font-weight: 400; margin: 0 4px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .achv-meta {
+    margin-top: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.1em;
+    font-weight: 500;
+  }
+  .achv-meta .pct {
+    color: var(--blue); font-weight: 700;
+  }
+
+  /* ===== PULL QUOTE ===== */
+  .pull-quote {
+    margin: 48px auto; max-width: 760px; text-align: center;
+    padding: 48px 32px; position: relative;
+    background: var(--paper-accent);
+    border-radius: 12px;
+  }
+  .pull-quote::before {
+    content: '"'; font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 96px; line-height: 1; color: var(--blue);
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    font-weight: 700;
+  }
+  .pull-quote p {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: clamp(20px, 2.4vw, 26px); line-height: 1.35;
+    color: var(--ink); font-weight: 500;
+    margin: 0; max-width: none; padding-top: 36px;
+    letter-spacing: -0.01em;
+  }
+  .pull-quote .attr {
+    margin-top: 24px; font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--blue); font-weight: 600;
+  }
+
+  /* ===== METHOD BOX ===== */
+  .method-box {
+    background: var(--paper-accent);
+    border-left: 3px solid var(--blue);
+    border-radius: 0 8px 8px 0;
+    padding: 20px 24px; margin: 24px 0;
+  }
+  .method-box .label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.2em;
+    color: var(--blue); margin-bottom: 10px; font-weight: 700;
+  }
+  .method-box p { font-size: 14px; color: var(--ink); margin-bottom: 0; max-width: none; line-height: 1.55; }
+
+  /* ===== MOMENTS ===== */
+  .moments { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 32px; }
+  .moment {
+    background: var(--white);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 28px 32px; position: relative;
+    transition: box-shadow 0.2s;
+  }
+  .moment:hover { box-shadow: 0 4px 16px rgba(5,80,207,0.06); }
+  .moment.warn { background: var(--white); }
+  .moment-tag {
+    display: inline-block; font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+    background: var(--charcoal); color: var(--white);
+    padding: 4px 10px; margin-bottom: 16px; font-weight: 600;
+    border-radius: 4px;
+  }
+  .moment.warn .moment-tag {
+    background: var(--white);
+    color: var(--blue);
+    border: 1px solid var(--blue);
+  }
+  .moment h4 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 22px; font-weight: 600; line-height: 1.25;
+    margin-bottom: 16px; letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .moment .context { font-size: 14px; color: var(--ink-soft); margin-bottom: 20px; max-width: none; }
+  .exchange {
+    background: var(--charcoal);
+    border-radius: 8px;
+    padding: 20px;
+    margin: 16px 0; font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .exchange .turn { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .exchange .turn:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+  .exchange .turn.user { text-align: right; border-left: 3px solid var(--blue); padding-left: 12px; }
+  .exchange .turn.coach { text-align: left; border-left: 3px solid var(--green); padding-left: 12px; }
+  .exchange .turn.user .who { color: var(--blue); font-weight: 600; }
+  .exchange .turn.coach .who { color: var(--green); }
+  .exchange .body { color: rgba(255,255,255,0.85); line-height: 1.55; }
+  .exchange .body em { font-style: italic; color: rgba(255,255,255,0.6); }
+  .exchange .body strong { font-weight: 600; color: var(--white); }
+  .moment .takeaway {
+    margin-top: 16px; padding-top: 16px;
+    border-top: 1px solid var(--rule); font-size: 13px;
+    color: var(--ink-soft); max-width: none; line-height: 1.55;
+  }
+  .moment .takeaway strong { font-weight: 600; color: var(--ink); }
+  code.inline {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px;
+    background: var(--paper-accent); padding: 2px 6px; border-radius: 3px;
+    color: var(--blue);
+  }
+
+  /* ===== ARCHITECTURE ===== */
+  .architecture {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 32px 0;
+  }
+  .arch-card {
+    background: var(--white);
+    padding: 24px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .arch-card:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(5,80,207,0.06);
+  }
+  .arch-card h4 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 17px; font-weight: 600; margin-bottom: 8px;
+    color: var(--ink); letter-spacing: -0.01em;
+  }
+  .arch-card p { font-size: 14px; margin-bottom: 0; line-height: 1.55; }
+  .arch-card .tag {
+    display: inline-block; font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; background: var(--paper-accent); color: var(--blue);
+    padding: 3px 8px; margin-bottom: 12px; letter-spacing: 0.1em;
+    font-weight: 600; border-radius: 3px;
+  }
+
+  /* ===== FOOTER ===== */
+  footer {
+    padding: 80px 0 64px;
+    text-align: center;
+    background: var(--charcoal);
+    color: var(--white);
+    margin-top: 0;
+  }
+  footer p { color: rgba(255,255,255,0.7); }
+  .footer-cta {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: clamp(28px, 4vw, 38px);
+    font-weight: 600; margin-bottom: 16px;
+    letter-spacing: -0.025em;
+    color: var(--white);
+  }
+  .footer-cta em {
+    font-style: normal;
+    color: var(--green);
+  }
+  .footer-link {
+    display: inline-block; margin-top: 24px; padding: 16px 36px;
+    background: var(--blue); color: var(--white); text-decoration: none;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    transition: all 0.2s; font-weight: 600;
+    border-radius: 6px;
+  }
+  .footer-link:hover {
+    background: var(--green);
+    color: var(--charcoal);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 226, 224, 0.3);
+  }
+  .footer-meta {
+    margin-top: 48px; font-size: 11px; color: rgba(255,255,255,0.4);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.05em;
+  }
+
+  @media (max-width: 720px) {
+    .stats-strip { grid-template-columns: repeat(2, 1fr); padding: 24px 0; }
+    .stat:nth-child(2) { border-right: none; }
+    .stat:nth-child(1), .stat:nth-child(2) {
+      padding-bottom: 24px; margin-bottom: 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .architecture { grid-template-columns: 1fr; }
+    .container { padding: 0 20px; }
+    .moment { padding: 24px; }
+    .hero-chart, .heatmap-wrap { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="masthead">
+      <span>Field Report <span class="dot"></span> Vol. 01</span>
+      <span>April 18 — May 15 · 2026</span>
+    </div>
+    <h1 class="title">28 days with an AI gym coach, <em>by the numbers.</em></h1>
+    <p class="deck">A push/pull/legs program run by a custom AI agent over Lark chat. Here's what the data shows, what the coach did well, and where it broke.</p>
+    <div class="byline">
+      <span>Built on <strong>OpenClaw</strong> + <strong>Lark Base</strong> + <strong>MiniMax2.7 </strong></span>
+      <a href="https://github.com/kendricksin/gym_routine" target="_blank">View source ↗</a>
+    </div>
+  </div>
+</header>
+
+<section style="padding-top: 0;">
+  <div class="container">
+    <div class="stats-strip">
+      <div class="stat"><div class="stat-num">404</div><div class="stat-label">Sets logged</div></div>
+      <div class="stat"><div class="stat-num highlight">20</div><div class="stat-label">Sessions</div></div>
+      <div class="stat"><div class="stat-num">131<span class="unit">k</span></div><div class="stat-label">kg·reps moved</div></div>
+      <div class="stat"><div class="stat-num highlight">+2.0<span class="unit">kg</span></div><div class="stat-label">Body weight</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-num">§ 01 · The Headline</div>
+    <h2>Bench Press: <em>+81% in 23 days</em></h2>
+    <p class="lede">The single clearest progression line in the dataset. Eight sessions, each one heavier than the last. The AI coach recommends the next session's working weight based on previous-session RPE and rep performance — and the recommendations held up.</p>
+    <div class="hero-chart">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Bench Press — top set per session</div>
+          <div class="chart-subtitle">Working weight (kg) over 8 sessions</div>
+        </div>
+        <div class="chart-delta">
+          <div class="delta-num">40 → 72.5</div>
+          <div class="delta-label">kilograms · top set</div>
+        </div>
+      </div>
+      <div style="height: 320px;"><canvas id="benchChart"></canvas></div>
+    </div>
+    <div class="method-box">
+      <div class="label">Honest caveat</div>
+      <p>The first session at 40 kg was logged at RPE 3 — almost weightless. Some of this curve is the coach finding true working weight, not pure strength gain. The slope from session 3 onward (57.5 kg → 72.5 kg, RPE 9 throughout) is the real signal: +15 kg at a consistent high-effort threshold.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-num">§ 02 · The Consistency</div>
+    <h2>20 sessions in 28 days, <em>visualized.</em></h2>
+    <p class="lede">Each square is one day from April 18 to May 15. Color encodes total training volume — kilograms times reps, summed across every set logged that day. Cream squares are rest days. The dark squares are the conditioning-heavy sessions where wall balls and farmer's carries pushed total reps into the thousands.</p>
+
+    <div class="heatmap-wrap">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Training volume — daily heatmap</div>
+          <div class="chart-subtitle">28 days · Apr 18 → May 15 · darker = more total volume</div>
+        </div>
+        <div class="chart-delta">
+          <div class="delta-num">20 / 28</div>
+          <div class="delta-label">days trained</div>
+        </div>
+      </div>
+
+      <div class="heatmap-weekdays">
+        <span>Sat</span><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span>
+      </div>
+      <div class="heatmap-grid" id="heatmapGrid"></div>
+
+      <div class="heatmap-legend">
+        <div class="heatmap-stats">
+          <div><span>Trained:</span><strong>20</strong></div>
+          <div><span>Rested:</span><strong>8</strong></div>
+          <div><span>Streak peak:</span><strong>5 days</strong></div>
+        </div>
+        <div class="scale">
+          <span>Less</span>
+          <div class="swatches">
+            <div class="sw tier-0"></div>
+            <div class="sw tier-1"></div>
+            <div class="sw tier-2"></div>
+            <div class="sw tier-3"></div>
+            <div class="sw tier-4"></div>
+          </div>
+          <span>More</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="method-box">
+      <div class="label">How volume was measured</div>
+      <p>Daily volume = sum of (weight × reps) across all logged sets. For bodyweight exercises like pull-ups, body weight was used as a stand-in. The May 7–8 peaks (the dark squares) are HYROX-prep sessions where wall balls and farmer's carries contributed huge rep counts — they're not heavier lifts, they're more total work moved through space.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-num">§ 03 · Across the Board</div>
+    <h2>Five compounds, <em>one upward slope.</em></h2>
+    <p class="lede">Every primary compound the coach prescribed progressed. The shape is consistent — early sessions calibrating, then steady linear additions of 2.5–5 kg per session as the coach's progression skill triggered.</p>
+    <div class="hero-chart">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Compound lifts — top set progression</div>
+          <div class="chart-subtitle">Heaviest set logged per session, kilograms</div>
+        </div>
+      </div>
+      <div style="height: 380px;"><canvas id="multiChart"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-num">§ 04 · The Receipts</div>
+    <h2>Every lift that <em>moved.</em></h2>
+    <p class="lede">All exercises trained three or more times, grouped by muscle. First-session weight on the left, latest on the right. Numbers are the heaviest working set logged on each date.</p>
+
+    <div class="group-block">
+      <div class="group-head"><h3>Chest</h3><span class="count">2 lifts · 13 sessions</span></div>
+      <div class="achievements">
+        <div class="achv"><div class="achv-name">Bench Press</div><div class="achv-value">40<span class="arrow">→</span>72.5<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">8 sessions · <span class="pct">+81%</span></div></div>
+        <div class="achv"><div class="achv-name">Pectoral Machine</div><div class="achv-value">30<span class="arrow">→</span>52.5<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">5 sessions · <span class="pct">+75%</span></div></div>
+      </div>
+    </div>
+
+    <div class="group-block">
+      <div class="group-head"><h3>Back</h3><span class="count">4 lifts · 18 sessions</span></div>
+      <div class="achievements">
+        <div class="achv"><div class="achv-name">Lat Pulldown</div><div class="achv-value">40<span class="arrow">→</span>55<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">6 sessions · <span class="pct">+38%</span></div></div>
+        <div class="achv"><div class="achv-name">Single Arm Row</div><div class="achv-value">42.5<span class="arrow">→</span>60<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">5 sessions · <span class="pct">+41%</span></div></div>
+        <div class="achv"><div class="achv-name">Pull-ups</div><div class="achv-value">BW<span class="arrow">→</span>+10<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">6 sessions · <span class="pct">weighted</span></div></div>
+        <div class="achv"><div class="achv-name">Barbell Shrugs</div><div class="achv-value">37.5<span class="arrow">→</span>50<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">3 sessions · <span class="pct">+33%</span></div></div>
+      </div>
+    </div>
+
+    <div class="group-block">
+      <div class="group-head"><h3>Legs &amp; glutes</h3><span class="count">5 lifts · 29 sessions</span></div>
+      <div class="achievements">
+        <div class="achv"><div class="achv-name">Barbell Squat</div><div class="achv-value">40<span class="arrow">→</span>65<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">7 sessions · <span class="pct">+63%</span></div></div>
+        <div class="achv"><div class="achv-name">Romanian Deadlift</div><div class="achv-value">40<span class="arrow">→</span>60<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">7 sessions · <span class="pct">+50%</span></div></div>
+        <div class="achv"><div class="achv-name">Hip Thrust</div><div class="achv-value">50<span class="arrow">→</span>75<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">5 sessions · <span class="pct">+50%</span></div></div>
+        <div class="achv"><div class="achv-name">Leg Press</div><div class="achv-value">60<span class="arrow">→</span>90<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">5 sessions · <span class="pct">+50%</span></div></div>
+        <div class="achv"><div class="achv-name">Calf Raises</div><div class="achv-value">30<span class="arrow">→</span>64<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">5 sessions · <span class="pct">+113%</span></div></div>
+      </div>
+    </div>
+
+    <div class="group-block">
+      <div class="group-head"><h3>Shoulders</h3><span class="count">3 lifts · 11 sessions</span></div>
+      <div class="achievements">
+        <div class="achv"><div class="achv-name">Arnold Press</div><div class="achv-value">14<span class="arrow">→</span>16<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">4 sessions · <span class="pct">+14%</span></div></div>
+        <div class="achv"><div class="achv-name">Face Pulls</div><div class="achv-value">15<span class="arrow">→</span>21.6<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">4 sessions · <span class="pct">+44%</span></div></div>
+        <div class="achv"><div class="achv-name">Overhead Press</div><div class="achv-value">8<span class="arrow">→</span>10<span style="font-size: 0.6em; color: var(--ink-faint);"> reps</span></div><div class="achv-meta">3 sessions · <span class="pct">rep PR</span></div></div>
+      </div>
+    </div>
+
+    <div class="group-block">
+      <div class="group-head"><h3>Arms &amp; conditioning</h3><span class="count">4 lifts · 15 sessions</span></div>
+      <div class="achievements">
+        <div class="achv"><div class="achv-name">Tricep Pushdown</div><div class="achv-value">20<span class="arrow">→</span>27.5<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">6 sessions · peak <span class="pct">30 kg</span></div></div>
+        <div class="achv"><div class="achv-name">Cable Low Row</div><div class="achv-value">10<span class="arrow">→</span>12.5<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">3 sessions · <span class="pct">+25%</span></div></div>
+        <div class="achv"><div class="achv-name">Upright DB Row</div><div class="achv-value">10<span class="arrow">→</span>14<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">3 sessions · <span class="pct">+40%</span></div></div>
+        <div class="achv"><div class="achv-name">Wall Balls</div><div class="achv-value">5<span class="arrow">→</span>20<span style="font-size: 0.6em; color: var(--ink-faint);"> kg</span></div><div class="achv-meta">3 sessions · <span class="pct">+300%</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="border: none; padding: 0;">
+  <div class="container">
+    <div class="pull-quote">
+      <p>You're approaching the limit of what you can recover from between sessions at this intensity. That's not failure — it's data.</p>
+      <div class="attr">— Coach Claw, on three consecutive drop sets · May 12</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-num">§ 05 · The Surplus Worked</div>
+    <h2>62.4 to 64.4 kg, <em>a controlled climb.</em></h2>
+    <p class="lede">Three thousand-plus calories a day, 130–150 g of protein. The body-weight line is noisy — daily hydration swings always are — but the trend is clean: roughly +0.55 kg per week, right at the upper edge of the lean-bulk range.</p>
+    <div class="hero-chart">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Body weight — daily weigh-ins</div>
+          <div class="chart-subtitle">Kilograms, with 4-day moving average</div>
+        </div>
+        <div class="chart-delta">
+          <div class="delta-num">+2.0 kg</div>
+          <div class="delta-label">25-day delta</div>
+        </div>
+      </div>
+      <div style="height: 280px;"><canvas id="bwChart"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-num">§ 06 · Where it Felt Like a Real Coach</div>
+    <h2>The agent did <em>coach work,</em> not just bookkeeping.</h2>
+    <p class="lede">Four moments from 28 days of chat logs where the AI did what you'd hope a smart coach would do — refuse a session for safety, name a pattern the lifter couldn't see yet, validate rest over guilt, push back on an unrealistic goal. Excerpts lightly condensed, intent preserved.</p>
+
+      <div class="moment">
+        <span class="moment-tag">Moment 01 · Pattern recognition</span>
+        <h4>It connected three drop sets across three exercises into one diagnosis.</h4>
+        <div class="context">Same session: I dropped weight mid-set on Bench, Arnold Press, and Pectoral Machine. Each one alone looked normal. The coach noticed them as a single signal.</div>
+        <div class="exchange">
+          <div class="turn user">
+            <div class="who">→ User</div>
+            <div class="body">I guess having to drop set means our form is getting off, either because we are too intense on our pacing between workouts or we are close to limit</div>
+          </div>
+          <div class="turn coach">
+            <div class="who">← Coach Claw</div>
+            <div class="body">You're reading the signal correctly. <strong>The pattern:</strong> Bench dropped 72.5 → 60. Arnold Press 16 → 14. Pectoral Machine 52.5 → 40. Fatigue is stacking <em>across</em> exercises — not just one muscle. RPE 9 on set 3-4 is appearing consistently. <strong>Drop sets = your body self-correcting before form breaks completely.</strong> You're approaching the limit of what you can recover from between sessions. That's not failure — it's data.</div>
+          </div>
+        </div>
+        <div class="takeaway"><strong>The skill in action:</strong> reading recent session history across exercises and synthesizing a single observation. This is what "the data is the source of truth" buys you — the coach can see what the lifter can't, because it has the full week in memory.</div>
+      </div>
+
+      <div class="moment">
+        <span class="moment-tag">Moment 02 · No guilt trips</span>
+        <h4>When I slept 12 hours and missed a session, it just said "good."</h4>
+        <div class="context">May 2 — Halfway through the program I crashed hard. Slept 12 hours, did nothing all morning. Most fitness apps would have pinged me with streak-loss anxiety.</div>
+        <div class="exchange">
+          <div class="turn user">
+            <div class="who">→ User</div>
+            <div class="body">I was unable to get anything done all morning just lying on my bed recovering</div>
+          </div>
+          <div class="turn coach">
+            <div class="who">← Coach Claw</div>
+            <div class="body">That's the debt collecting. Two weeks of 6-day training, 3,000kcal bulk, poor sleep quality — your body is demanding the recovery it needs. Lying in bed isn't wasted time if that's what it takes to keep going. <em>Don't beat yourself up about it. Rest days are part of the program. The gym won't go anywhere.</em></div>
+          </div>
+        </div>
+        <div class="takeaway"><strong>What I expected vs what I got:</strong> I was prepared to be told to salvage an evening session. Instead the coach validated the rest, asked about bodyweight, and dropped the topic. The lack of guilt felt deliberate.</div>
+      </div>
+
+      <div class="moment">
+        <span class="moment-tag">Moment 03 · Honest pushback</span>
+        <h4>It pushed back on a grandiose HYROX goal — then revised when I gave better context.</h4>
+        <div class="context">May 3 — I asked if I could be ready for HYROX in August. The coach didn't just say yes. It mapped the gap, then updated its take when I clarified I wanted to finish, not podium.</div>
+        <div class="exchange">
+          <div class="turn user">
+            <div class="who">→ User</div>
+            <div class="body">do you think we can make it for hyrox august 15 with our current training objectives</div>
+          </div>
+          <div class="turn coach">
+            <div class="who">← Coach Claw</div>
+            <div class="body"><strong>Can you make it?</strong> Technically yes, if you commit fully. But you're currently doing powerlifting volume, HYROX needs conditioning + muscular endurance + cardio. <em>The honest concern:</em> You're sleeping 5 hours, struggling to eat enough, and 6 days/week lifting is already taxing. Adding HYROX-level conditioning on top might break you before the race. Do you want it? Because it's a different kind of hard.</div>
+          </div>
+          <div class="turn user">
+            <div class="who">→ User</div>
+            <div class="body">i mean i dont really expect to perform exceptionally well, but just be able to complete</div>
+          </div>
+          <div class="turn coach">
+            <div class="who">← Coach Claw</div>
+            <div class="body">Fair point. Lightweight is an advantage in HYROX — less mass on the run, easier on burpees and wall balls. 120 minutes is a comfortable finishing time. <em>Add 2 cardio sessions a week from July and you can comfortably finish in 1h50–2h10.</em> The timeline is realistic for a finisher, not a podium.</div>
+          </div>
+        </div>
+        <div class="takeaway"><strong>What worked:</strong> the coach didn't immediately concede when I pushed back — it took the new information (lower ambition, lower body weight) and revised the assessment with specifics. Not stubborn, not pliable. Calibrated.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-num">§ 07 · Where it Broke</div>
+    <h2>The plumbing leaks, and <em>the model can't add.</em></h2>
+    <p class="lede">An honest report has to include the failure modes. Across 28 days the agent produced bad math, queried the wrong session for "last weight," had cron jobs fail silently, and let three database tables go stale for two weeks before I caught them.</p>
+
+    <div class="moments">
+
+      <div class="moment warn">
+        <span class="moment-tag">Limit 01 · Bad arithmetic</span>
+        <h4>It got a volume calculation visibly wrong, twice in one message.</h4>
+        <div class="context">May 12 — I asked the coach to compare tricep volume to last session. The first answer was off; the recalculation was also off. I had to flag it. The model writes to a database but has no calculator — basic math happens in tokens.</div>
+        <div class="exchange">
+          <div class="turn user"><div class="who">→ User</div><div class="body">Math for volume seems off</div></div>
+          <div class="turn coach">
+            <div class="who">← Coach Claw</div>
+            <div class="body">You're right — let me recalculate. Last session: 27.5kg × 10 × 3 = 825, plus 30kg × 4 bonus = 120, total 945. This session: 27.5kg × 10 × 2 + 27.5kg × 9 = 797.5… <em>Wait — that's not a drop, that's a +52.5kg increase. The arithmetic I showed was: 710 vs 860 → -150. That 860 was a misread + wrong number. Apologies.</em></div>
+          </div>
+        </div>
+        <div class="takeaway"><strong>Mitigation:</strong> volume math should be a deterministic skill that calls SUM over the workout-log table, not free-form LLM arithmetic. This is a fix on the roadmap, not a limitation of the approach.</div>
+      </div>
+
+      <div class="moment warn">
+        <span class="moment-tag">Limit 02 · Wrong session retrieved</span>
+        <h4>"Last session" for Wall Balls pulled from leg day instead of push day.</h4>
+        <div class="context">May 12 — Wall Balls are programmed differently on push days (light, high rep) vs leg days (heavy, race-prep). The coach grabbed the most recent log regardless of session type and prescribed 6kg when I'd just done 20kg the session before.</div>
+        <div class="exchange">
+          <div class="turn user"><div class="who">→ User</div><div class="body">Wasnt our last wall ball yesterday with 20 x 3 sets? We should look into our session closing logic</div></div>
+          <div class="turn coach">
+            <div class="who">← Coach Claw</div>
+            <div class="body">You're right — I made an error. Last Wall Balls was 20kg × 20 × 3 on Session 18 (legs). The "last" for Wall Balls on <em>push</em> day was Session 16 (6kg × 25/15/15). <strong>The session-close logic issue:</strong> when I reference "last" for planning, I need to check the right session type's data, not just the most recent session regardless of type. I'll flag this for review.</div>
+          </div>
+        </div>
+        <div class="takeaway"><strong>The deeper issue:</strong> the exercise-history record is keyed on exercise name, not on (exercise, session_type). A fix means schema work, not prompt tweaking. The coach can't reason its way out of a missing column.</div>
+      </div>
+
+      <div class="moment warn">
+        <span class="moment-tag">Limit 03 · Stale plumbing</span>
+        <h4>Three database tables went unwritten for two weeks before I noticed.</h4>
+        <div class="context">May 12 — When I asked for a completeness review, the coach found that the <code class="inline">progress</code>, <code class="inline">session_sequence</code>, and <code class="inline">exercise_history</code> tables had all been written once during bootstrap and never updated. Daily logging only touched <code class="inline">workout_log</code>.</div>
+        <div class="exchange">
+          <div class="turn coach">
+            <div class="who">← Coach Claw, after diagnosis</div>
+            <div class="body"><strong>Three real problems:</strong> SESSION_SEQUENCE never synced after Apr 29 — every session shows completed=False. PROGRESS table has only 3 records (Apr 18-20) — nothing logged since bootstrap. EXERCISE_HISTORY has 19 entries all with exercise_name: None. <em>The actual training log is solid. But these gaps mean we can't do proper progression reports.</em></div>
+          </div>
+          <div class="turn coach">
+            <div class="who">← Coach Claw, 5 min later</div>
+            <div class="body">Housekeeping done ✅ 17 new PROGRESS records written. EXERCISE_HISTORY needs manual Lark edit (can't fix via API). Setting up weekly cron…<br><em style="color: var(--blue); font-weight: 600;">⚠️ Cron failed</em></div>
+          </div>
+        </div>
+        <div class="takeaway"><strong>Lesson:</strong> a chat-driven agent will happily keep operating on the one table that gets written every session, while everything downstream silently rots. The coach needs a "data audit" skill that runs on a schedule — and the cron itself needs to actually fire.</div>
+      </div>
+
+      <div class="moment warn">
+        <span class="moment-tag">Limit 04 · Wrong reference</span>
+        <h4>It used OHP benchmarks to grade Arnold Press, suggested I lift a "full grown woman".</h4>
+        <div class="context">May 3 — I asked how my lifts compared to standards. The coach used barbell Overhead Press numbers as the comparison even though I'd swapped to Arnold Press (lighter, dumbbell-based). The user-side push-back was funnier than the bug.</div>
+        <div class="exchange">
+          <div class="turn user"><div class="who">→ User</div><div class="body">arnold press… are you serious? Thats lifting a full grown woman on each arm.</div></div>
+          <div class="turn coach">
+            <div class="who">← Coach Claw</div>
+            <div class="body">Haha, fair point — I pulled that number from OHP barbell standards, not Arnold Press. Wrong exercise comparison. <em>Arnold Press reality check: 16–18kg per arm is the realistic intermediate target.</em> That's a +4kg gap, not a +33kg gap. Much more achievable.</div>
+          </div>
+        </div>
+        <div class="takeaway"><strong>Pattern:</strong> the coach is strong on general fitness reasoning but its strength benchmarks come from training-data folklore, not exercise-specific reference tables. Either give it a real lookup tool or stop letting it produce numbers it can't source.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-num">§ 08 · Under the Hood</div>
+    <h2>What the coach <em>actually is.</em></h2>
+    <p class="lede">Not a chatbot wrapper. A set of seven skills running on OpenClaw, with Lark Base as the source-of-truth database and Lark chat as the interface. Every session log writes typed records to a real schema — and every coaching message above came out of reading those records. The underlying model is <strong>MiniMax 2.7</strong>.</p>
+    <div class="architecture">
+      <div class="arch-card"><span class="tag">SKILL · plan-session</span><h4>"Heading to gym"</h4><p>Reads the rotation, queues the next push/pull/legs day with target weights based on last session's RPE and rep performance.</p></div>
+      <div class="arch-card"><span class="tag">SKILL · log-workout</span><h4>Post-session dump</h4><p>Parses freeform set logs ("Bench 70kg 7,7 rpe 8"), writes typed records to Lark Base, updates progression targets.</p></div>
+      <div class="arch-card"><span class="tag">SKILL · suggest-deload</span><h4>Stall detection</h4><p>Catches consecutive RPE-10 sessions or drop-set patterns and proposes a lighter session before form breaks down.</p></div>
+      <div class="arch-card"><span class="tag">SKILL · query-history</span><h4>"How many days streak?"</h4><p>Pulls PRs, trends, and rest-day counts. Also where most of the data-staleness issues surfaced — it could only see what was written.</p></div>
+      <div class="arch-card"><span class="tag">SKILL · suggest-swap</span><h4>Exercise substitutions</h4><p>The Arnold Press vs OHP conversation, the Incline Fly → Pectoral Machine swap. Biomechanics reasoning + safety considerations.</p></div>
+      <div class="arch-card"><span class="tag">SKILL · send-reminder</span><h4>Nightly cron</h4><p>Runs at 20:00. Closes stale sessions, sends morning briefings. Cron reliability turned out to be one of the weakest links.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-cta">The skills are <em>open-source.</em></div>
+    <p style="max-width: 540px; margin: 0 auto 16px;">Steal the schema, fork the skills, run your own coach - works with any agent runtime that reads SKILL.md files.</p>
+    <a href="https://github.com/kendricksin/gym_routine" target="_blank" class="footer-link">github.com/kendricksin/gym_routine</a>
+    <div class="footer-meta">Generated from 404 sets · 15 weigh-ins · 28 days of Lark chat · Apr 18 — May 15, 2026</div>
+  </div>
+</footer>
+
+<script>
+  Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = '#4a4b4d';
+
+  // ===== VOLUME HEATMAP =====
+  const dailyVolume = [
+    { date: '2026-04-18', dom: 18, vol: 5610, sess: 'Legs' },
+    { date: '2026-04-19', dom: 19, vol: 6160, sess: 'Push' },
+    { date: '2026-04-20', dom: 20, vol: 16250, sess: 'Pull' },
+    { date: '2026-04-21', dom: 21, vol: 6401, sess: 'Legs' },
+    { date: '2026-04-22', dom: 22, vol: 0, sess: null },
+    { date: '2026-04-23', dom: 23, vol: 23366, sess: 'Push' },
+    { date: '2026-04-24', dom: 24, vol: 0, sess: null },
+    { date: '2026-04-25', dom: 25, vol: 8066, sess: 'Legs' },
+    { date: '2026-04-26', dom: 26, vol: 3970, sess: 'Push' },
+    { date: '2026-04-27', dom: 27, vol: 20411, sess: 'Pull' },
+    { date: '2026-04-28', dom: 28, vol: 0, sess: null },
+    { date: '2026-04-29', dom: 29, vol: 8808, sess: 'Legs' },
+    { date: '2026-04-30', dom: 30, vol: 4195, sess: 'Push' },
+    { date: '2026-05-01', dom: 1, vol: 0, sess: null },
+    { date: '2026-05-02', dom: 2, vol: 18620, sess: 'Pull' },
+    { date: '2026-05-03', dom: 3, vol: 9881, sess: 'Pull' },
+    { date: '2026-05-04', dom: 4, vol: 4721, sess: 'Legs' },
+    { date: '2026-05-05', dom: 5, vol: 0, sess: null },
+    { date: '2026-05-06', dom: 6, vol: 6775, sess: 'Pull' },
+    { date: '2026-05-07', dom: 7, vol: 69860, sess: 'Legs' },
+    { date: '2026-05-08', dom: 8, vol: 65345, sess: 'Push' },
+    { date: '2026-05-09', dom: 9, vol: 20709, sess: 'Pull' },
+    { date: '2026-05-10', dom: 10, vol: 8560, sess: 'Legs' },
+    { date: '2026-05-11', dom: 11, vol: 5879, sess: 'Push' },
+    { date: '2026-05-12', dom: 12, vol: 8790, sess: 'Push' },
+    { date: '2026-05-13', dom: 13, vol: 0, sess: null },
+    { date: '2026-05-14', dom: 14, vol: 0, sess: null },
+    { date: '2026-05-15', dom: 15, vol: 0, sess: 'sick' }
+  ];
+
+  function tierFor(vol) {
+    if (vol === 0) return 0;
+    if (vol < 7000) return 1;
+    if (vol < 15000) return 2;
+    if (vol < 35000) return 3;
+    return 4;
+  }
+
+  const monthNames = { 4: 'Apr', 5: 'May' };
+  function formatDate(s) {
+    const [y, m, d] = s.split('-').map(Number);
+    return `${monthNames[m]} ${d}`;
+  }
+
+  const grid = document.getElementById('heatmapGrid');
+  dailyVolume.forEach(d => {
+    const cell = document.createElement('div');
+    const tier = tierFor(d.vol);
+    cell.className = `heatmap-day tier-${tier}`;
+
+    const dom = document.createElement('div');
+    dom.className = 'dom';
+    dom.textContent = d.dom;
+    cell.appendChild(dom);
+
+    if (d.sess && d.vol > 0) {
+      const badge = document.createElement('div');
+      badge.className = 'badge';
+      badge.textContent = d.sess[0];
+      cell.appendChild(badge);
+    }
+
+    const tip = document.createElement('div');
+    tip.className = 'tip';
+    if (d.vol > 0) {
+      tip.innerHTML = `${formatDate(d.date)} · ${d.sess} · ${d.vol.toLocaleString()} kg·reps`;
+    } else if (d.sess === 'sick') {
+      tip.innerHTML = `${formatDate(d.date)} · sick (COVID)`;
+    } else {
+      tip.innerHTML = `${formatDate(d.date)} · rest day`;
+    }
+    cell.appendChild(tip);
+
+    grid.appendChild(cell);
+  });
+
+  // ===== CHART COLORS =====
+  const ink = '#212224';
+  const blue = '#0550CF';
+  const green = '#00E2E0';
+  const sky = '#DFE9FC';
+  const charcoal = '#212224';
+  const rule = '#e4e8ef';
+
+  // Lift colors using brand palette
+  const liftBench = blue;
+  const liftSquat = green;
+  const liftRDL = '#003a89';   // dark variant of blue
+  const liftHip = '#008e8c';   // dark variant of green
+  const liftLeg = charcoal;
+
+  new Chart(document.getElementById('benchChart'), {
+    type: 'line',
+    data: {
+      labels: ['Apr 18','Apr 19','Apr 23','Apr 26','Apr 30','May 04','May 08','May 11'],
+      datasets: [{
+        label: 'Bench Press (kg)',
+        data: [40, 55, 57.5, 60, 62.5, 65, 70, 72.5],
+        borderColor: blue,
+        backgroundColor: 'rgba(5, 80, 207, 0.08)',
+        fill: true, tension: 0.25, borderWidth: 3,
+        pointRadius: 5, pointBackgroundColor: '#fff',
+        pointBorderColor: blue, pointBorderWidth: 2.5, pointHoverRadius: 7
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: charcoal,
+          titleFont: { family: "'IBM Plex Mono', monospace", size: 11, weight: 600 },
+          bodyFont: { family: "'IBM Plex Mono', monospace", size: 12 },
+          padding: 12, borderRadius: 6,
+          callbacks: { label: (ctx) => ctx.parsed.y + ' kg' }
+        }
+      },
+      scales: {
+        y: { min: 35, max: 78, ticks: { callback: v => v + ' kg', color: '#8a8b8d' }, grid: { color: rule, drawBorder: false } },
+        x: { grid: { display: false }, ticks: { color: '#8a8b8d' } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('multiChart'), {
+    type: 'line',
+    data: {
+      labels: ['Day 0','Day 3','Day 7','Day 11','Day 15','Day 19','Day 22'],
+      datasets: [
+        { label: 'Bench Press', data: [40, 55, 57.5, 60, 62.5, 65, 72.5], borderColor: blue, backgroundColor: 'transparent', tension: 0.25, borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: blue },
+        { label: 'Barbell Squat', data: [40, 45, 50, 52.5, 57.5, 60, 65], borderColor: green, backgroundColor: 'transparent', tension: 0.25, borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: green },
+        { label: 'Romanian DL', data: [40, 44, 48, 52, 57.5, 56, 60], borderColor: liftRDL, backgroundColor: 'transparent', tension: 0.25, borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: liftRDL },
+        { label: 'Hip Thrust', data: [null, null, 50, 60, 65, 70, 75], borderColor: liftHip, backgroundColor: 'transparent', tension: 0.25, borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: liftHip },
+        { label: 'Leg Press', data: [null, 60, 70, 80, 85, 90, null], borderColor: charcoal, backgroundColor: 'transparent', tension: 0.25, borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: charcoal, borderDash: [4, 3] }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x' },
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: 500 }, boxWidth: 8, boxHeight: 8, color: ink } },
+        tooltip: { backgroundColor: charcoal, titleFont: { family: "'IBM Plex Mono', monospace", size: 11, weight: 600 }, bodyFont: { family: "'IBM Plex Mono', monospace", size: 12 }, padding: 12, borderRadius: 6, callbacks: { label: (ctx) => ctx.dataset.label + ': ' + ctx.parsed.y + ' kg' } }
+      },
+      scales: {
+        y: { beginAtZero: false, min: 30, max: 100, ticks: { callback: v => v + ' kg', color: '#8a8b8d' }, grid: { color: rule, drawBorder: false } },
+        x: { grid: { display: false }, ticks: { color: '#8a8b8d' } }
+      }
+    }
+  });
+
+  const bwDates = ['Apr 18','Apr 19','Apr 20','Apr 22','Apr 23','Apr 25','Apr 26','Apr 27','Apr 29','May 03','May 04','May 06','May 08','May 11','May 12'];
+  const bwRaw = [62.4, 62.4, 62.8, 62.3, 62.6, 62.8, 63.3, 63.4, 63.1, 62.8, 63.2, 64.1, 63.7, 64.1, 64.4];
+  const bwAvg = bwRaw.map((_, i) => {
+    const start = Math.max(0, i - 3);
+    const slice = bwRaw.slice(start, i + 1);
+    return slice.reduce((a, b) => a + b, 0) / slice.length;
+  });
+
+  new Chart(document.getElementById('bwChart'), {
+    type: 'line',
+    data: {
+      labels: bwDates,
+      datasets: [
+        { label: 'Daily', data: bwRaw, borderColor: 'rgba(33, 34, 36, 0.25)', backgroundColor: 'transparent', tension: 0, borderWidth: 1.5, pointRadius: 3, pointBackgroundColor: 'rgba(33, 34, 36, 0.4)', borderDash: [3, 3] },
+        { label: 'Moving avg', data: bwAvg, borderColor: blue, backgroundColor: 'rgba(5, 80, 207, 0.08)', tension: 0.4, borderWidth: 3, pointRadius: 0, fill: true }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: 500 }, boxWidth: 8, boxHeight: 8, color: ink } },
+        tooltip: { backgroundColor: charcoal, titleFont: { family: "'IBM Plex Mono', monospace", size: 11, weight: 600 }, bodyFont: { family: "'IBM Plex Mono', monospace", size: 12 }, padding: 12, borderRadius: 6, callbacks: { label: (ctx) => ctx.dataset.label + ': ' + (Math.round(ctx.parsed.y * 10) / 10) + ' kg' } }
+      },
+      scales: {
+        y: { min: 61.5, max: 65, ticks: { callback: v => v + ' kg', color: '#8a8b8d' }, grid: { color: rule, drawBorder: false } },
+        x: { grid: { display: false }, ticks: { color: '#8a8b8d', maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } }
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
